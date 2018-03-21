@@ -1,0 +1,5 @@
+{:deps {org.clojure/clojure {:mvn/version "1.9.0"}
+        clj-http {:mvn/version "3.8.0"}
+        cheshire {:mvn/version "5.8.0"}
+        org.clojure/java.jdbc {:mvn/version "0.7.3"}
+        org.xerial/sqlite-jdbc {:mvn/version "3.20.1"}}}
