@@ -1,6 +1,8 @@
-(ns bib-detect.dlut2018
+(ns dlut2018
   (:require [clj-http.client :as http]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [clojure.java.jdbc :as jdbc]
+            [db]))
 
 ;; google drive
 (def gdrive-cred {:client-id     (System/getenv "GD_CLIENT_ID")
@@ -18,12 +20,12 @@
                   :as          :json})
       (get-in [:body :access_token])))
 
-(defn file-ids
-  "Return list file-id in a folder.
+(defn list-files
+  "Return list files in a folder.
   API ref https://developers.google.com/drive/v3/reference/files/list"
   [token folder-id]
   (let [files-url "https://www.googleapis.com/drive/v3/files"
-        q (format "'%s' in parents and mimeType contains 'image/'" folder-id)]
+        q (format "'%s' in parents and mimeType contains 'image/' and trashed = false" folder-id)]
     (->> (loop [result []
                 nextPageToken ""]
            (if (nil? nextPageToken)
@@ -35,10 +37,11 @@
                                                          "q"         q}
                                           :as           :json}))]
                (recur (concat result (:files data)) (:nextPageToken data)))))
-         (map :id))))
+         (map (fn [f] {:image  (format "https://drive.google.com/file/d/%s/view" (:id f))
+                       :thumbnail (format "https://drive.google.com/thumbnail?id=%s&sz=w800-h800" (:id f))})))))
 
 ;; OCR
-(def subscription-key (System/getenv "OCP_SUBS_KEY"))
+(def subscription-key (System/getenv "MV_SUBS_KEY"))
 
 (defn bib?
   "Validate bib number."
@@ -49,26 +52,43 @@
     (catch NumberFormatException _)))
 
 (defn bib
-  "Extract BIB number from image url."
-  [image-url]
-  (let [regions (-> "https://westcentralus.api.cognitive.microsoft.com/vision/v1.0/ocr?language=unk&detectOrientation=true"
-                    (http/post {:headers      {"Content-Type" "application/json"
-                                               "Ocp-Apim-Subscription-Key" subscription-key}
-                                :body (json/generate-string {:url image-url})
-                                :as           :json})
-                    (get-in [:body :regions]))]
-    (->> regions
-         (mapcat :lines)
-         (mapcat :words)
-         (map :text)
-         (filter bib?))))
-
-(clojure.pprint/pprint (bib "https://drive.google.com/thumbnail?id=1Pw5n5d99K_YsIErfODa9Cy_sZ32BBQUP&sz=w1000-h1000"))
-
-; https://drive.google.com/file/d/1Pw5n5d99K_YsIErfODa9Cy_sZ32BBQUP/view
+  "Extract BIB number from image url.
+  5,000 transactions, 20 per minute."
+  [{:keys [image thumbnail]}]
+  (try
+    (let [regions (-> "https://westcentralus.api.cognitive.microsoft.com/vision/v1.0/ocr?language=unk&detectOrientation=true"
+                      (http/post {:headers      {"Content-Type" "application/json"
+                                                 "Ocp-Apim-Subscription-Key" subscription-key}
+                                  :body (json/generate-string {:url thumbnail})
+                                  :as           :json})
+                      (get-in [:body :regions]))]
+      (->> regions
+           (mapcat :lines)
+           (mapcat :words)
+           (map :text)
+           (filter bib?)
+           (map (fn [b] {:image image
+                         :bib b}))))
+    (catch Exception e
+      (println thumbnail)
+      (println (:body (ex-data e)))
+      (when (= 429 (:status (ex-data e)))
+        (throw e)))))
 
 (def lnh-dlutp25 "1tLZlXvpvU_9R9wHSaChN38R1EPiZ-T3j")
+(def ifitness-start-part1 "1vAQgp33pOWm-B9MjdvnryJP7xKyMHC7L")
+(def ifitness-start-part2 "1VwsZ7J7jyo-Fg0QHwt6YPPeL5sDU1JOE")
+(def ifitness-finish-part5 "12kRxQ3DQpiG8An0K-1zOMhDhiOwfdCAP")
+(def ifitness-finish-part6 "1vF1ZZlSsliD1SeFZPA5tncIQrk2lgCY1")
 
-#_(let [token (access-token gdrive-cred)
-        ids (file-ids token lnh-dlutp25)]
-    (prn (count ids)))
+(let [token (access-token gdrive-cred)
+      files (list-files token ifitness-start-part2)]
+  (println (count files) "images")
+  (doseq [images (drop 0 (partition-all 20 files))]
+    (let [t (System/currentTimeMillis)
+          bibs (mapcat bib images)]
+      (println "detect" (count bibs) "bibs")
+      (try
+        (jdbc/insert-multi! db/db-spec :dlut2018 bibs)
+        (catch Exception _))
+      (Thread/sleep (- 80000 (- (System/currentTimeMillis) t))))))
