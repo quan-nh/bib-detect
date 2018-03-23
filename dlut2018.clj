@@ -2,7 +2,7 @@
   (:require [clj-http.client :as http]
             [cheshire.core :as json]
             [clojure.java.jdbc :as jdbc]
-            [db]))
+            [db :refer [db-spec]]))
 
 ;; google drive
 (def gdrive-cred {:client-id     (System/getenv "GD_CLIENT_ID")
@@ -89,6 +89,6 @@
           bibs (mapcat bib images)]
       (println "detect" (count bibs) "bibs")
       (try
-        (jdbc/insert-multi! db/db-spec :dlut2018 bibs)
+        (jdbc/insert-multi! db-spec :dlut2018 bibs)
         (catch Exception _))
       (Thread/sleep (- 80000 (- (System/currentTimeMillis) t))))))
