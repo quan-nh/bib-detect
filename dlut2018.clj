@@ -75,14 +75,14 @@
       (when (= 429 (:status (ex-data e)))
         (throw e)))))
 
-(def lnh-dlutp25 "1tLZlXvpvU_9R9wHSaChN38R1EPiZ-T3j")
+(def svclb-dlutp1 "1qgpxM3lnMJpmXsCwrJ_R602ZwVX52r4h")
 (def ifitness-start-part1 "1vAQgp33pOWm-B9MjdvnryJP7xKyMHC7L")
 (def ifitness-start-part2 "1VwsZ7J7jyo-Fg0QHwt6YPPeL5sDU1JOE")
 (def ifitness-finish-part5 "12kRxQ3DQpiG8An0K-1zOMhDhiOwfdCAP")
 (def ifitness-finish-part6 "1vF1ZZlSsliD1SeFZPA5tncIQrk2lgCY1")
 
 (let [token (access-token gdrive-cred)
-      files (list-files token ifitness-start-part2)]
+      files (list-files token svclb-dlutp1)]
   (println (count files) "images")
   (doseq [images (drop 0 (partition-all 20 files))]
     (let [t (System/currentTimeMillis)
