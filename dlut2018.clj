@@ -40,9 +40,6 @@
          (map (fn [f] {:image  (format "https://drive.google.com/file/d/%s/view" (:id f))
                        :thumbnail (format "https://drive.google.com/thumbnail?id=%s&sz=w800-h800" (:id f))})))))
 
-;; OCR
-(def subscription-key (System/getenv "MV_SUBS_KEY"))
-
 (defn bib?
   "Validate bib number."
   [text]
@@ -50,30 +47,6 @@
     (let [num (Integer/parseInt text)]
       (< 0 num 5000))
     (catch NumberFormatException _)))
-
-(defn bib
-  "Extract BIB number from image url.
-  5,000 transactions, 20 per minute."
-  [{:keys [image thumbnail]}]
-  (try
-    (let [regions (-> "https://westcentralus.api.cognitive.microsoft.com/vision/v1.0/ocr?language=unk&detectOrientation=true"
-                      (http/post {:headers      {"Content-Type" "application/json"
-                                                 "Ocp-Apim-Subscription-Key" subscription-key}
-                                  :body (json/generate-string {:url thumbnail})
-                                  :as           :json})
-                      (get-in [:body :regions]))]
-      (->> regions
-           (mapcat :lines)
-           (mapcat :words)
-           (map :text)
-           (filter bib?)
-           (map (fn [b] {:image image
-                         :bib b}))))
-    (catch Exception e
-      (println thumbnail)
-      (println (:body (ex-data e)))
-      (when (= 429 (:status (ex-data e)))
-        (throw e)))))
 
 (def svclb-dlutp1 "1qgpxM3lnMJpmXsCwrJ_R602ZwVX52r4h")
 (def ifitness-start-part1 "1vAQgp33pOWm-B9MjdvnryJP7xKyMHC7L")
